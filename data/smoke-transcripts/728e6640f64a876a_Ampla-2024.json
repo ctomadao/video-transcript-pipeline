@@ -1,0 +1,24 @@
+{
+  "id": "728e6640f64a876a",
+  "title": "Ampla 2024",
+  "source_path": "/mnt/data/github/video-transcript-pipeline/data/smoke-input/g8f3Sn_iOO4-Ampla 2024-NA.mp4",
+  "rel_path": "g8f3Sn_iOO4-Ampla 2024-NA.mp4",
+  "duration_sec": 7.173,
+  "language": "pt",
+  "language_probability": 1.0,
+  "asr_model": "large-v3",
+  "device": "cpu",
+  "compute_type": "int8",
+  "speaker_default": "Kim Paim",
+  "segments": [
+    {
+      "start": 1.07,
+      "end": 1.73,
+      "text": "E aí",
+      "speaker": "Kim Paim"
+    }
+  ],
+  "meta": {
+    "youtube_id": "g8f3Sn_iOO4"
+  }
+}

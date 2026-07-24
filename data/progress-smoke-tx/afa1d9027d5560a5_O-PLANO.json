@@ -1,0 +1,24 @@
+{
+  "id": "afa1d9027d5560a5",
+  "title": "O PLANO",
+  "source_path": "/mnt/data/github/video-transcript-pipeline/data/progress-smoke-input/rUlSimo7RcM-O PLANO-NA.mp4",
+  "rel_path": "rUlSimo7RcM-O PLANO-NA.mp4",
+  "duration_sec": 7.133,
+  "language": "pt",
+  "language_probability": 1.0,
+  "asr_model": "large-v3-turbo",
+  "device": "cpu",
+  "compute_type": "int8",
+  "speaker_default": "Kim Paim",
+  "segments": [
+    {
+      "start": 1.01,
+      "end": 2.01,
+      "text": "Amém.",
+      "speaker": "Kim Paim"
+    }
+  ],
+  "meta": {
+    "youtube_id": "rUlSimo7RcM"
+  }
+}
