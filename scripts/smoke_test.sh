@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Smoke: 3 short videos, large-v3, transcription only.
+# Optional smoke: 3 shortest videos from VIDEO_ROOT. Recreates data/smoke-* locally
+# (those dirs are gitignored). Requires ffmpeg + a real video library.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"

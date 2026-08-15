@@ -197,13 +197,13 @@ video-transcript-pipeline/
 ├── REQUIREMENTS.md
 ├── pyproject.toml
 ├── src/vtp/                # discover, audio, transcribe, export, state
-├── data/
+├── data/                   # created locally (gitignored except .gitkeep)
 │   ├── input/              # symlink (Linux) or junction (Windows) to the library
 │   ├── audio/              # temporary wav (deleted unless --keep-audio)
 │   ├── transcripts/        # per-video .md + .json (local)
 │   ├── grok-upload/        # INDEX + INSTRUCTIONS + packs/pack-NNN.md
 │   └── state.db
-└── scripts/                # bash smokes (Linux / Git Bash / WSL)
+└── scripts/                # optional bash smokes; they recreate dirs under data/
 ```
 
 ### Pipeline stages

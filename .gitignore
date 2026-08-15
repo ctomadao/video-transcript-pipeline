@@ -5,15 +5,13 @@ __pycache__/
 .dist/
 build/
 dist/
-data/audio/
-data/transcripts/
-data/state.db
-data/state.db-*
-data/grok-upload/
-data/input
 *.wav
 *.log
 .cache/
 models/
 .pytest_cache/
 .ruff_cache/
+
+# Local library, ASR outputs, Grok packs, smoke runs — not part of the clone
+data/**
+!data/.gitkeep
