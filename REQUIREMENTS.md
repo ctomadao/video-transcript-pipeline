@@ -36,7 +36,7 @@ Build a **local, resume-safe pipeline** that:
 | SC-3 | Per-video (or per-batch) **structured analytical summaries** cover arguments, evidence, opinions, book links, and extra insights. |
 | SC-4 | Explicit attempt to **link** video content to books (month/chapter/topic when possible). |
 | SC-5 | Local inference uses existing **Ollama + ROCm** hardware without mandatory cloud STT/LLM. |
-| SC-6 | Pipeline does not require copying the full video library (symlink/`data/input` is acceptable). |
+| SC-6 | Pipeline does not require copying the full video library (Linux symlink or Windows junction to `data/input` is acceptable). |
 
 ---
 
@@ -56,7 +56,7 @@ Build a **local, resume-safe pipeline** that:
 
 | Area | Scope |
 |------|--------|
-| **Ingest** | Discover videos under configured roots; stable IDs; job state |
+| **Ingest** | Discover videos under configured roots (symlink or junction); stable IDs; job state |
 | **Audio** | Extract mono 16 kHz (or model-appropriate) audio via ffmpeg; no full video re-encode |
 | **ASR** | Local speech-to-text, language forced/preferred **pt** / **pt-BR** |
 | **Optional diarization** | Identify speakers when useful; default narrator = Kim Paim when single-voice or primary track |
@@ -85,6 +85,8 @@ Perfect punctuation is **not critical**. Prefer semantic clarity; optional light
 
 ### 4.1 Local compute
 
+**Original development host (Linux):**
+
 | Item | Spec / note |
 |------|-------------|
 | GPU | AMD **Radeon RX 7900 XTX**, **ROCm** enabled |
@@ -93,6 +95,17 @@ Perfect punctuation is **not critical**. Prefer semantic clarity; optional light
 | Video storage | **`/home/clovis/Downloads/Tartube-new/Atlas Brasileiro - Kim Paim/`** (~2270 `.mp4`, flat Tartube layout) |
 | App / pipeline storage | Separate storage; **`data/input` → symlink** to video root is adequate |
 | Grok project storage | ~**3.5 GB** already used by monthly books |
+
+**Portable hosts (Linux or Windows):** the same CLI runs after Python 3.11+, ffmpeg/ffprobe on `PATH`, and a link to the library. Setup steps are in [Definition.md](./Definition.md) and [README.md](./README.md).
+
+| Item | Spec / note |
+|------|-------------|
+| OS | Linux or Windows 10/11 |
+| Python | 3.11+ in a project `.venv` |
+| ffmpeg | Must resolve as `ffmpeg` / `ffprobe` (apt, or `winget install Gyan.FFmpeg`) |
+| Video library | `--input`, `VTP_VIDEO_ROOT`, Linux **symlink**, or Windows **directory junction** (`mklink /J` / `New-Item -ItemType Junction`). Do not copy the library. |
+| ASR device | NVIDIA: `--device cuda` when CTranslate2 sees CUDA. AMD Linux: ROCm is for Ollama, not CTranslate2 (usually `--device cpu`). AMD Windows: **CPU only**. |
+| Workers | Default 4×4 threads; use `--workers 1` on laptops / first Windows installs |
 
 ### 4.0 Critical architecture: Grok books are NOT visible to local Ollama
 
@@ -187,7 +200,7 @@ AnalysisDocument
 
 | ID | Requirement | Priority |
 |----|-------------|----------|
-| FR-D1 | Walk input roots (symlink OK) for common video extensions (`.mp4`, `.mkv`, `.mov`, `.webm`, …). | Must |
+| FR-D1 | Walk input roots (Linux symlink or Windows junction OK) for common video extensions (`.mp4`, `.mkv`, `.mov`, `.webm`, …). | Must |
 | FR-D2 | Assign stable IDs from path + size + mtime (and/or content hash option). | Must |
 | FR-D3 | Persist job state in SQLite (or equivalent): discovered / pending / running / done / failed. | Must |
 | FR-D4 | Resume: skip `done`; support `--retry-failed`. | Must |
@@ -375,7 +388,7 @@ Columns at minimum: `id | title | month | duration | transcript_path | analysis_
 ## 10. Pipeline stages (logical architecture)
 
 ```text
-[Video library] --symlink--> data/input
+[Video library] --symlink/junction--> data/input
         |
         v
    (1) Discover + state.db
@@ -413,7 +426,7 @@ Stages 3 and 5 are **GPU-critical** and should not contend by default.
 ### Phase 0 — Foundations (done / in progress)
 
 - Repo skeleton, Definition.md, requirements, AGENTS.md.
-- Confirm ffmpeg, ROCm, Ollama, symlink to video root.
+- Confirm ffmpeg, ROCm (Linux/AMD host), Ollama, symlink or junction to video root.
 
 ### Phase 1 — Transcription MVP
 
@@ -479,7 +492,7 @@ Stages 3 and 5 are **GPU-critical** and should not contend by default.
 
 ### Transcription MVP
 
-- [ ] Discover finds videos via symlink without copying library.
+- [ ] Discover finds videos via symlink or junction without copying library.
 - [ ] 3-video smoke test produces timestamped PT-BR Markdown.
 - [ ] Re-run skips completed jobs; failed jobs retryable.
 - [ ] `status` reports counts by state.

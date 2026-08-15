@@ -1,275 +1,292 @@
-I'll pull the Grok/Zed docs and any project-setup guidance so the answer matches how this environment actually works.
+# Definition and setup — Atlas Brasileiro video pipeline
 
-Here’s a practical path from empty folder → batch transcription utility → Grok Account Project.
+Practical path from a clone of this repo → local transcription CLI → files you upload to the Grok Account Project **Atlas Brasileiro**.
 
-## What you’re building (two different “projects”)
+Works on **Linux** and **Windows**. See [README.md](./README.md) for a shorter command list.
+
+## What you are running (two different “projects”)
 
 | Layer | What it is | Purpose |
 |--------|------------|---------|
-| **Local repo** (Zed folder) | Your transcription utility | Process 2000+ videos offline, produce text/JSON |
-| **Grok Project** ([grok.com/project](https://grok.com/project)) | Web workspace with custom instructions + uploaded files | Chat against the transcripts as knowledge |
+| **Local repo** (this folder) | Transcription utility (`python -m vtp`) | Process 2000+ videos offline, write Markdown |
+| **Grok Project** ([grok.com/project](https://grok.com/project)) | Web workspace + custom instructions + uploaded files | Chat against books + transcripts |
 
-Zed is only for developing the utility. The Grok Account Project is where you upload the **outputs** (text), not the raw videos.
+The IDE (Zed, VS Code, Cursor, etc.) is only for developing the utility. The Grok Account Project is where you upload **outputs** (text), not the raw videos.
 
 ---
 
-## 1. Create and open a new project in Zed
+## 1. Prerequisites
 
-Zed treats a **folder** as a project. There is no special “New Project” wizard.
+### Both operating systems
+
+- **Python 3.11+**
+- **ffmpeg** and **ffprobe** on `PATH` (the CLI calls them by name)
+- **Git**
+- A **video library** on disk (Tartube-style `{youtubeId}-{title}-NA.mp4` is the expected layout). Do **not** copy the library into `data/`.
+
+### Linux
 
 ```bash
-# Pick a location outside your other repos
-mkdir -p ~/projects/video-transcript-pipeline
-cd ~/projects/video-transcript-pipeline
-git init
+# Debian / Ubuntu
+sudo apt update
+sudo apt install -y python3 python3-venv python3-pip ffmpeg git
+```
 
-# Optional: Python scaffolding
+Optional: ROCm for **Ollama** on AMD GPUs (analysis stage later). **faster-whisper / CTranslate2 does not use ROCm** — on the original AMD host ASR is CPU. NVIDIA CUDA is used when `ctranslate2.get_supported_compute_types("cuda")` succeeds.
+
+### Windows
+
+1. Install [Python 3.11+](https://www.python.org/downloads/). Enable **Add python.exe to PATH**.
+2. Install [Git for Windows](https://git-scm.com/download/win).
+3. Install ffmpeg so `ffmpeg` and `ffprobe` work in a **new** terminal:
+
+   ```powershell
+   winget install Gyan.FFmpeg
+   ```
+
+   Or unzip a [Gyan full build](https://www.gyan.dev/ffmpeg/builds/) and add its `bin` folder to the user PATH.
+4. Install the [Microsoft Visual C++ Redistributable](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist) (CTranslate2 / faster-whisper).
+5. Optional NVIDIA CUDA toolkit if you want `--device cuda`. **AMD GPUs on Windows: use CPU** (no ROCm).
+6. If PowerShell refuses to activate the venv:
+
+   ```powershell
+   Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+   ```
+
+7. If extract/discover fails on very long Tartube names, enable Win32 long paths.
+
+Check:
+
+```text
+python --version     # or: py -3 --version
+ffmpeg -version
+ffprobe -version
+```
+
+---
+
+## 2. Create the virtualenv and install the package
+
+### Linux
+
+```bash
+cd /path/to/video-transcript-pipeline
 python3 -m venv .venv
 source .venv/bin/activate
-pip install --upgrade pip
-
-# Open in Zed (install CLI from Zed menu: "Install CLI" if needed)
-zed .
-# or new window:
-zed -n .
+python -m pip install --upgrade pip
+pip install -e .
 ```
 
-In Zed:
+### Windows (PowerShell)
 
-- **File → Open** / `Ctrl+O` (Linux) → select the folder  
-- Or drag the folder onto Zed  
+```powershell
+cd C:\path\to\video-transcript-pipeline
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -e .
+```
 
-Avoid opening this inside `game-guide-manager` unless you want it mixed with that repo.
+### Windows (cmd)
+
+```bat
+cd C:\path\to\video-transcript-pipeline
+py -3 -m venv .venv
+.venv\Scripts\activate.bat
+python -m pip install --upgrade pip
+pip install -e .
+```
+
+Stay inside the activated venv for every `python -m vtp …` command.
 
 ---
 
-## 2. Wire Grok into Zed (optional, for coding help)
+## 3. Point `data/input` at the video library
 
-Grok Build can run as an ACP agent that IDEs (including Zed) talk to:
+Never copy thousands of MP4s into the repo. Use a link, or pass `--input`.
+
+Default library on the original Linux host:
+
+`/home/clovis/Downloads/Tartube-new/Atlas Brasileiro - Kim Paim`
+
+Override with env var `VTP_VIDEO_ROOT` or `--input`.
+
+### Linux (symlink)
 
 ```bash
-grok agent stdio
+mkdir -p data
+ln -sfn "/home/clovis/Downloads/Tartube-new/Atlas Brasileiro - Kim Paim" data/input
+# or:
+# ln -sfn "$VTP_VIDEO_ROOT" data/input
 ```
 
-In practice you either:
+### Windows (directory junction — no Administrator)
 
-- Use a Zed extension / agent panel configured for Grok ACP, or  
-- Run `grok` in the integrated terminal from this project root  
+PowerShell:
 
-Add project rules so Grok follows your conventions:
+```powershell
+New-Item -ItemType Directory -Force -Path data | Out-Null
+New-Item -ItemType Junction -Path data\input -Target "D:\Videos\Atlas Brasileiro - Kim Paim"
+```
 
-```markdown
-# AGENTS.md
+cmd:
 
-## Goal
-CLI utility that batch-transcribes video files and writes structured transcripts
-for upload into a Grok.com Project.
+```bat
+mkdir data
+mklink /J data\input "D:\Videos\Atlas Brasileiro - Kim Paim"
+```
 
-## Constraints
-- Resume-safe (skip already-done files)
-- Idempotent outputs
-- Never re-encode video unless extracting audio is required
-- Prefer faster-whisper / local STT over cloud for bulk cost control
+A **junction** is the Windows equivalent of a directory symlink for this purpose. A true symlink (`mklink /D`) needs Developer Mode or an elevated shell; you do not need that.
+
+### No link (either OS)
+
+```bash
+python -m vtp discover --input "/absolute/path/to/library"
+```
+
+```powershell
+python -m vtp discover --input "D:\Videos\Atlas Brasileiro - Kim Paim"
 ```
 
 ---
 
-## 3. Recommended utility design (2000+ videos)
+## 4. Smoke test, then full run
 
-### Stack (simple and scalable)
+Same CLI on both OS.
+
+```bash
+# 3 videos only
+python -m vtp discover --limit 3
+python -m vtp run --language pt --limit 3 --workers 1 --device cpu
+python -m vtp status
+
+# Full library (after smoke looks good)
+python -m vtp discover
+python -m vtp run --language pt --model large-v3-turbo --workers 4 --cpu-threads 4 --device auto
+python -m vtp status
+python -m vtp export --format grok
+```
+
+On a laptop or first Windows box, start with `--workers 1`. Linux overnight bulk on a 16-core CPU is typically `--workers 4 --cpu-threads 4`.
+
+Bash-only helpers (`scripts/smoke_test.sh`, `scripts/smoke_turbo_parallel.sh`) assume a Unix shell. On Windows use the `python -m vtp` commands above, or run the scripts from **Git Bash** / **WSL** after adjusting `VIDEO_ROOT`.
+
+`run` resets stuck `running` jobs unless you pass `--no-reset-running`.
+
+---
+
+## 5. Recommended utility design (already implemented)
+
+### Stack
 
 | Choice | Why |
 |--------|-----|
-| **Python 3.11+** | Mature media + ML ecosystem |
-| **ffmpeg** | Extract/normalize audio from any container |
-| **faster-whisper** (or Whisper.cpp) | Local, free at scale, good accuracy |
-| **SQLite or JSONL job log** | Track progress, failures, retries |
-| **Click / argparse** | Clean CLI |
-
-Cloud STT (Deepgram, AssemblyAI, OpenAI Whisper API) works but gets expensive and rate-limited at 2000+ videos. Local is usually better for bulk.
+| **Python 3.11+** | Media + ML ecosystem; works on Linux and Windows |
+| **ffmpeg** | Extract/normalize audio; no full video re-encode |
+| **faster-whisper** | Local, free at scale; CUDA on NVIDIA, else CPU |
+| **SQLite** (`data/state.db`) | Resume, failures, retries |
+| **Click** | CLI |
 
 ### Directory layout
 
 ```text
 video-transcript-pipeline/
 ├── AGENTS.md
+├── Definition.md           # this file
 ├── README.md
-├── pyproject.toml          # or requirements.txt
-├── src/
-│   └── vtp/
-│       ├── cli.py
-│       ├── discover.py     # find videos under input roots
-│       ├── audio.py        # ffmpeg extract
-│       ├── transcribe.py   # whisper
-│       ├── export.py       # markdown / json / chunks
-│       └── state.py        # job DB
+├── REQUIREMENTS.md
+├── pyproject.toml
+├── src/vtp/                # discover, audio, transcribe, export, state
 ├── data/
-│   ├── input/              # or symlink to your video library
-│   ├── audio/              # optional intermediate wav/m4a
-│   ├── transcripts/        # final .md / .json / .jsonl
+│   ├── input/              # symlink (Linux) or junction (Windows) to the library
+│   ├── audio/              # temporary wav (deleted unless --keep-audio)
+│   ├── transcripts/        # per-video .md + .json (local)
+│   ├── grok-upload/        # INDEX + INSTRUCTIONS + packs/pack-NNN.md
 │   └── state.db
-└── scripts/
-    └── run_batch.sh
+└── scripts/                # bash smokes (Linux / Git Bash / WSL)
 ```
 
 ### Pipeline stages
 
-1. **Discover** – walk folders for `.mp4`, `.mkv`, `.mov`, `.webm`, etc.  
-2. **Hash / stable ID** – path + size + mtime (or content hash) so renames are detectable.  
-3. **Extract audio** – `ffmpeg -i video -vn -ac 1 -ar 16000 audio.wav`  
-4. **Transcribe** – language detect or force language; write raw segments with timestamps.  
-5. **Export for Grok** – human-readable Markdown + optional JSON.  
-6. **Mark done** – only mark success after write is fsynced; failures stay retryable.
+1. **Discover** — walk `data/input` for video extensions.  
+2. **Stable id** — path + size + mtime.  
+3. **Extract audio** — `ffmpeg` mono 16 kHz WAV.  
+4. **Transcribe** — `faster-whisper`, language `pt`.  
+5. **Export for Grok** — bundled Markdown packs + INDEX (see below).  
+6. **Mark done** — only after the transcript write succeeds.
 
-### Scale knobs for 2000+
+---
 
-- **Resume**: skip files already in `state.db` with status `done`.  
-- **Concurrency**: 1 GPU job at a time (or N CPU workers); don’t spawn 50 Whisper processes.  
-- **Model size**: `base`/`small` for speed; `medium`/`large-v3` for quality (much slower).  
-- **Queue batches**: e.g. 50–100 videos per run overnight.  
-- **Disk**: audio intermediates are large — delete after successful transcript if space is tight.  
-- **Failures**: log error + stderr; continue; retry with `--retry-failed`.
+## 6. Format and package for Grok
 
-Minimal CLI shape:
+Grok.com **Projects** choke on ~2000 loose files and only **partially** scan a single huge zip. This repo therefore exports **~48 Markdown packs** (~6 MB each) plus a catalog.
 
 ```bash
-python -m vtp discover --input /path/to/videos --db data/state.db
-python -m vtp run --workers 1 --model small --export-dir data/transcripts
-python -m vtp export --format grok --out data/grok-upload/
-python -m vtp status
+python -m vtp export --format grok --out data/grok-upload
 ```
+
+Upload:
+
+1. `data/grok-upload/INSTRUCTIONS.md` (also **paste** it into project custom instructions)  
+2. `data/grok-upload/INDEX.md`  
+3. `data/grok-upload/README.md`  
+4. Every file under `data/grok-upload/packs/` (`pack-001.md` …)
+
+Do **not** upload `data/transcripts/` (thousands of files) or rely on one zip of the whole corpus.
+
+Each spoken line is:
+
+```text
+[youtubeId @ HH:MM:SS] spoken text
+```
+
+Watch URL: `https://www.youtube.com/watch?v={youtubeId}&t={seconds}s`
 
 ---
 
-## 4. Format transcripts so Grok can use them
-
-Grok Projects accept **uploaded files** as project knowledge (custom workspaces + files). You will hit **file size / count limits**, so don’t upload 2000 raw dumps blindly.
-
-### Per-video Markdown (good default)
-
-```markdown
-# Title: Interview with Alice – Episode 12
-- Source: /media/videos/ep12.mp4
-- Duration: 01:14:22
-- Language: en
-- Transcribed: 2026-07-23
-- Model: faster-whisper small
-
-## Transcript
-
-[00:00:12] Welcome back to the show...
-[00:01:05] Today we discuss...
-```
-
-### Packaging strategies for Grok upload
-
-| Corpus size | Approach |
-|-------------|----------|
-| Small (tens of hours) | One `.md` per video, upload folder zip if needed |
-| Medium | Group by series/date: `2024-Q1.md`, `channel-name.md` |
-| Large (2000+) | **Chunk + index**: many mid-sized files + a master catalog |
-
-**Master catalog** (`INDEX.md`) you always upload:
-
-```markdown
-# Video library index
-| id | title | date | path | transcript_file | topics (auto) |
-|----|-------|------|------|-----------------|---------------|
-| v001 | ... | ... | ... | series-a/ep-01.md | ... |
-```
-
-Then upload:
-
-1. `INDEX.md`  
-2. Themed bundles (`series-a.md`, `series-b.md`, …) of a few hundred KB–few MB each  
-3. Optional: short **summaries** per video (Grok or a local LLM) so the Project can navigate without loading every full transcript  
-
-If a single file is too large, split by time (`ep-01-part1.md`, `part2.md`) rather than dumping everything into one blob.
-
----
-
-## 5. Create the Grok Account Project
+## 7. Create / update the Grok Account Project
 
 On [grok.com](https://grok.com/) (signed in):
 
-1. Open **Projects** → create a new project (e.g. “Video Library Knowledge”).  
-2. Add **custom instructions**, for example:
+1. Open **Projects** → **Atlas Brasileiro** (or create it).  
+2. Paste `data/grok-upload/INSTRUCTIONS.md` into **custom instructions**.  
+3. Upload the files listed in §6.  
+4. Chat only inside that project. Cite book location **or** video title + timestamp + YouTube link. If it is not in the files, the answer is that it is not in the corpus.
 
-   > You are a research assistant over my video library transcripts.  
-   > Always cite video title + timestamp when answering.  
-   > Prefer INDEX.md for navigation, then open the matching transcript file.  
-   > If the answer is not in the files, say so.
+Books (~3.5 GB from 2023/10) stay in the project. Transcripts **complement** them.
 
-3. **Upload** your prepared `.md` / `.txt` / `.json` files (or zip if the UI allows).  
-4. Chat inside that Project only — context is scoped to those files.
-
-**Reality check:** 2000 full transcripts may exceed practical Project upload limits. Prefer:
-
-- summaries + index for day-to-day Q&A,  
-- full transcripts for a subset, or  
-- rotate sets of files by topic as needed.
-
-For programmatic RAG at true corpus scale, use the **xAI API / Collections** path rather than only the consumer Project UI. For a “small utility + Grok Project” workflow, file packages + index is the right first step.
+For programmatic RAG at true corpus scale, xAI **Collections** (API/console) is the other path. A grok.com project zip does **not** unzip itself into one indexed file per video.
 
 ---
 
-## 6. Suggested first session in Zed
+## 8. First-session checklist
 
-1. Open `~/projects/video-transcript-pipeline` in Zed.  
-2. Install system deps:
-
-   ```bash
-   # Debian/Ubuntu examples
-   sudo apt install ffmpeg
-   # GPU optional: install CUDA stack if you have an NVIDIA GPU
-   ```
-
-3. Install Python deps:
-
-   ```bash
-   pip install faster-whisper tqdm rich
-   # or: openai-whisper, whisperx, etc.
-   ```
-
-4. Smoke-test on **3 videos**, not 2000.  
-5. Verify one Markdown looks good, then scale.  
-6. Export a small pack → upload to Grok Project → ask a question that needs a timestamp cite.
+| Step | Linux | Windows |
+|------|-------|---------|
+| Tools on PATH | `ffmpeg -version` | New terminal after winget |
+| Venv | `source .venv/bin/activate` | `.\.venv\Scripts\Activate.ps1` |
+| Library link | `ln -sfn … data/input` | `New-Item -ItemType Junction …` |
+| Smoke 3 videos | `discover --limit 3` then `run --limit 3 --workers 1` | Same |
+| Full ASR | `run --workers 4` | Start with `--workers 1` if RAM is tight |
+| Grok pack | `export --format grok` | Same |
 
 ---
 
-## 7. Decision checklist
+## 9. Decision checklist
 
 | Question | Recommendation |
 |----------|----------------|
-| Where do videos live? | Symlink `data/input` → your library; don’t copy 2000 files |
-| Language? | Force if known (`en`); auto-detect if mixed |
-| Need speakers? | Add diarization later (WhisperX); not for v1 |
-| Need perfect punctuation? | Optional second pass; raw segments first |
-| GPU? | Strongly preferred for 2000+; CPU is days–weeks |
-| Feed Grok? | Markdown + INDEX, not raw MP4 |
+| Where do videos live? | Link `data/input` → library; don’t copy |
+| Language? | Force `pt` |
+| Need speakers? | Not in v1; default narrator Kim Paim |
+| Need perfect punctuation? | No |
+| GPU? | NVIDIA CUDA if available; AMD Windows = CPU; original Linux host = CPU for CTranslate2 |
+| Feed Grok? | Bundled `packs/*.md` + INDEX + INSTRUCTIONS, not raw MP4 |
 
 ---
 
-## Minimal next commands (copy/paste)
+## Related
 
-```bash
-mkdir -p ~/projects/video-transcript-pipeline/{src/vtp,data/{input,transcripts},scripts}
-cd ~/projects/video-transcript-pipeline
-git init
-python3 -m venv .venv && source .venv/bin/activate
-printf '%s\n' 'faster-whisper' 'tqdm' 'rich' > requirements.txt
-pip install -r requirements.txt
-echo "# Video Transcript Pipeline" > README.md
-zed .
-```
-
-From there, either hand-write the CLI or ask Grok in that folder: *“Scaffold a resume-safe batch video transcription CLI using faster-whisper and ffmpeg.”*
-
----
-
-If you want, I can scaffold that repo structure and a working `discover` / `run` / `export` CLI next (still as a **new** project, separate from `game-guide-manager`). Tell me:
-
-1. OS GPU situation (NVIDIA / AMD / CPU-only)  
-2. Video root path pattern  
-3. Preferred languages  
-4. Whether Grok should get **full transcripts**, **summaries**, or both
+- [README.md](./README.md) — quick start  
+- [REQUIREMENTS.md](./REQUIREMENTS.md) — product requirements (original host inventory in §4 is Linux/ROCm)  
+- [AGENTS.md](./AGENTS.md) — conventions for coding agents  

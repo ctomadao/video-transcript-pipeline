@@ -1,13 +1,15 @@
 # Title: O PLANO
 - Id: `afa1d9027d5560a5`
-- Source: `/mnt/data/github/video-transcript-pipeline/data/smoke-input/rUlSimo7RcM-O PLANO-NA.mp4`
-- Rel path: `rUlSimo7RcM-O PLANO-NA.mp4`
+- YouTube: `rUlSimo7RcM`
+- Watch: https://www.youtube.com/watch?v=rUlSimo7RcM
 - Duration: 00:00:07
-- Language: pt (p=1.00)
-- Transcribed: 2026-07-23T23:13:19+00:00
-- ASR model: large-v3 (cpu/int8)
-- Speakers: Kim Paim (default narrator; diarization not applied)
+- Language: pt
+- ASR model: large-v3
+
+Cite as: **video title** + `[HH:MM:SS]` + YouTube URL with `&t=<seconds>s`.
+Each line is `[rUlSimo7RcM @ HH:MM:SS] spoken text`.
+Example: `[rUlSimo7RcM @ 00:01:05]` → https://www.youtube.com/watch?v=rUlSimo7RcM&t=65s
 
 ## Transcript
 
-[00:00:01] [Kim Paim] Tchau.
+[rUlSimo7RcM @ 00:00:01] Tchau.

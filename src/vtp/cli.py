@@ -43,7 +43,7 @@ def main() -> None:
     type=click.Path(path_type=Path),
     default=DEFAULT_INPUT,
     show_default=True,
-    help="Video root (symlink to library is fine).",
+    help="Video root (symlink or Windows directory junction is fine).",
 )
 @click.option(
     "--db",
@@ -58,8 +58,11 @@ def cmd_discover(input_root: Path, db_path: Path, limit: int | None) -> None:
     if not input_root.exists():
         raise click.ClickException(
             f"Input not found: {input_root}\n"
-            f"Create symlink e.g.:\n"
-            f"  ln -sfn '{DEFAULT_VIDEO_ROOT}' '{DEFAULT_INPUT}'"
+            "Point at the video library without copying it:\n"
+            f"  Linux:   ln -sfn '{DEFAULT_VIDEO_ROOT}' '{DEFAULT_INPUT}'\n"
+            "  Windows: New-Item -ItemType Junction -Path data\\input "
+            f"-Target '{DEFAULT_VIDEO_ROOT}'\n"
+            "Or pass --input / set VTP_VIDEO_ROOT to the library folder."
         )
     db = _db(db_path)
     n = discover(input_root, db, limit=limit)
@@ -187,19 +190,40 @@ def cmd_run(
     default="grok",
     show_default=True,
 )
+@click.option(
+    "--include-json/--no-include-json",
+    default=False,
+    show_default=True,
+    help="Ignored for grok packs (JSON is local-only).",
+)
+@click.option(
+    "--bundle-max-mb",
+    type=float,
+    default=6.0,
+    show_default=True,
+    help="Max UTF-8 size of each packs/pack-NNN.md (Grok project upload).",
+)
 def cmd_export(
     db_path: Path,
     transcripts_dir: Path,
     out_dir: Path,
     fmt: str,
+    include_json: bool,
+    bundle_max_mb: float,
 ) -> None:
-    """Build INDEX and/or Grok upload pack from completed transcripts."""
+    """Build INDEX and bundled timestamped Grok packs (video id + [HH:MM:SS] per line)."""
     db = _db(db_path)
     if fmt == "index":
         path = build_index(db, out_dir / "INDEX.md")
         console.print(f"Wrote {path}")
     else:
-        path = package_for_grok(db, transcripts_dir, out_dir)
+        path = package_for_grok(
+            db,
+            transcripts_dir,
+            out_dir,
+            include_json=include_json,
+            bundle_max_mb=bundle_max_mb,
+        )
         console.print(f"Grok pack ready: {path}")
 
 
